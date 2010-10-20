@@ -1,0 +1,312 @@
+;meta circular translator
+
+#lang scheme
+
+(define defined_identifiers '())
+(define primitive-procs '( + - * / = < >  obj car cdr))
+(define algaebric-ops '( + - * / = < > ))
+(define tab (make-string 4 #\ ))
+(define tab-count 0)
+
+
+;;define print tab
+(define (print-tab count)
+  (if (= count 0) null
+      (begin (display tab)(print-tab (- count 1)))))
+
+(define (l ) 
+  (begin (driverloop) ( l )))
+
+;;
+;;driverloop --> prompts for the input
+;;
+
+(define (driverloop)
+  (let ([inp (read)])
+    (analyse inp)
+    (newline)
+    )
+ )
+  
+(define (prompt string)
+  (newline) (display string))
+
+
+;;
+;;top-level analyser
+;;
+(define (analyse exp)
+  (cond [(self-evaluating? exp) (printf "~s"exp)]
+        [(variable? exp) (printf "~s"exp)]
+        [(string? exp) (printf "~s"exp)]        
+        [(quoted? exp) (analyse-quote (text-of-exp exp))]
+        [(empty? exp)(begin (printf "not ")(analyse (cadr exp)))]
+        [(str? exp)(printf "\'~s\'"(cdr exp))]
+        [(import? exp)(begin (printf"import ")(analyse (cadr exp))) ]
+        [(return? exp)(begin (printf"return ")(analyse (cadr exp))) ]
+        [(display? exp)(begin (printf"print ")(analyse (cadr exp))) ]
+        [(assignment? exp) (assign-analyser exp)]
+        [(if? exp) (to-py-if exp)]
+  ;     [(cond? exp) (cond-analyser exp)]                                            
+        [(define? exp)(define-analyser exp)]      
+        [(proc-call? exp)(to-py-proc (proc-name exp) (proc-par exp))]
+        [(begin? exp) (analyse-sequence (begin-body exp))]
+        [(primitive? exp) (apply (operator exp) (operands exp))] 
+        [else (error "unknown expression :" exp)]
+    )
+  )
+
+;;------------------------------------------------
+;;predicates
+;;
+
+(define (self-evaluating? exp) 
+  (cond [(number? exp) true]
+        [(string? exp) true]
+        [else false])) 
+
+
+(define (variable? exp)
+(symbol? exp))
+
+(define (assignment? exp)
+  (tagged-list? exp 'set!))
+
+(define (if? exp)
+  (tagged-list? exp 'if))
+
+(define (return? exp)
+  (tagged-list? exp 'return))
+
+(define (empty? exp)
+  (tagged-list? exp 'empty?))
+
+(define (cond? exp)
+  (tagged-list? exp 'cond))
+
+(define (import? exp)
+  (tagged-list? exp 'import))
+
+(define (display? exp)
+  (tagged-list? exp 'display))
+
+
+(define (str? exp)
+  (tagged-list? exp 'str))
+
+(define (quoted? exp)
+  (tagged-list? exp 'quote))
+
+
+;;proc-call?
+(define (proc-call? exp)
+  (if (present? (car exp) defined_identifiers) true
+      false))
+
+
+(define (begin? exp)
+  (tagged-list? exp 'begin))
+  
+(define (define? exp)
+  (tagged-list? exp 'define))
+
+
+;primitive?
+(define (primitive? exp)
+  (present? (car exp) primitive-procs))
+
+;algaebric
+(define (algaebric? exp)
+  (present?  exp algaebric-ops))
+
+
+;present?
+
+(define (present? exp l)
+    (cond [( null? l) false]
+          [( eq? exp (first l)) true]
+          [else (present? exp (rest l))]))
+
+;;-----------------------------------------------
+
+
+;;quoted  ;----text-ofexp
+;;(define (text-of-exp exp) 
+  ;;(substring exp 1))
+
+
+(define (text-of-exp exp) (cadr exp))
+
+
+
+;;
+;;definition 
+;;
+(define (def-var exp)
+  (if (symbol? (cadr exp)) (cadr exp)
+      (caadr exp)))
+(define (def-par exp)
+  (if (symbol? (cadr exp)) '() (cdadr exp)))
+(define (def-body exp) (cddr exp))
+
+;;  
+;application
+;;
+(define (operator exp) (car exp))
+(define (operands exp) (cdr exp))
+(define (no-operand? exp) (null? exp))
+(define (first-operand exp) (car exp))
+(define (rest-of-operands exp) (cdr exp))
+
+;;body-begin
+(define (begin-body exp) (cdr exp))
+
+;;if
+(define (if-cond exp) (cadr exp))
+(define (if-consequent exp) (caddr exp))
+(define (if-alternate exp) 
+  (if (not (null? (cdddr exp)))
+      (cadddr exp) `false))
+
+;;
+;;assignment
+(define (assignment-var exp) (cadr exp)) 
+(define (assignment-body exp) (caddr exp)) 
+
+;;proc-call
+(define (proc-name exp) (car exp))
+(define (proc-par exp) (cdr exp))
+
+;;tagged-list
+(define (tagged-list? exp tag)
+  (if (pair? exp)
+      (eq? (car exp) tag)
+      false))
+
+
+
+
+;;
+;;----------------------------------------------------------------------------
+;;
+;;apply 
+;;
+(define (apply proc arguments)
+  (cond [(algaebric? proc)(to-py-algaebric proc arguments)]
+        [(eq? 'car proc)(printf "~s[0]"(car arguments ))]
+        [(eq? 'cdr proc)(printf "~s[1:]"(car arguments ))]
+        [(eq? 'obj proc)(to-py-obj arguments)]
+        [else (error "unknown procedure type:"proc)]))
+
+
+
+;;
+;;analyse-sequence
+;;
+(define (analyse-sequence exp)
+  (print-tab tab-count)
+  (cond [(null? (cdr exp)) (begin (analyse (car exp))(newline))]
+        [else (analyse (car exp))
+              (newline)
+              (analyse-sequence (cdr exp))
+              ]))
+;;
+;;analyse-quote
+;;
+(define (analyse-quote exp)
+  (if (pair? exp) (to-py-array exp) (analyse exp)))
+
+(define (count a)
+  (if (null? a) 0 (+ 1 (count (rest a)))))
+
+;-----------------------------
+
+;to-py-algaebric
+ 
+(define (to-py-algaebric proc arguments)
+  (define (alg l proc fo lr)
+    (cond [(null? l ) (analyse fo)]
+         [else   (begin (printf "(")
+                        (alg (cdr l) proc fo (cdr lr))
+                        (printf "~s"proc)
+                        (analyse (car lr))
+                        (printf ")"))]))
+  (alg (cdr arguments) proc (car arguments) (reverse (cdr arguments))))
+
+;;;
+;;;assign-analyser
+;;;
+(define (assign-analyser exp)
+   (print-tab tab-count)(printf "~s = "(assignment-var exp))
+  (analyse (assignment-body exp)))
+  
+
+(define (arg-list l)
+    (cond [(null? (cdr l))(analyse (car l))]
+          [else (begin (analyse (car l))(printf ",")(arg-list (cdr l)))]))
+
+
+;to-py-obj
+(define (to-py-obj arguments)  
+  (define (temp arg) 
+   (cond  [(null? arg)(printf "")]
+          [(eq? '$ (car arg))(begin (printf "(")(printf ")")(temp (cdr arg)))]
+          [(eq? '$l (car arg))(begin (printf "(")(arg-list (cadr arg))(printf ")"))]         
+          [else (begin (printf ".") (analyse (car arg)) (temp (cdr arg)))]))
+  (analyse (car arguments))(temp (cdr arguments)))
+
+
+;;proc-call-analyser
+(define (to-py-proc name par)
+  (printf "~s "name )(printf "(")(arg-list par)(printf ")"))
+
+;;
+;to-py-if
+;;
+(define (to-py-if exp)
+ ; (newline)
+  ;(print-tab tab-count)
+  (printf "if ")(analyse (if-cond exp))(printf ":")(newline)
+  (set! tab-count (+ tab-count 1))
+  (print-tab tab-count)(analyse (if-consequent exp))  
+  (newline)
+  (set! tab-count (- tab-count 1))
+  (print-tab tab-count)(printf "else :")(newline)
+  (set! tab-count (+ tab-count 1))
+  (print-tab tab-count)(analyse (if-alternate exp))
+  (set! tab-count (- tab-count 1)))
+
+;;to-py-decl
+(define (to-py-decl name expr)
+  (print-tab tab-count)(printf"~s = " name) 
+  (analyse expr))
+
+;;  
+;;to-py-def
+;;
+(define (to-py-def name par body)    
+  (newline)
+  (printf "def ~s ("name)(arg-list par)(printf ") :")(newline)
+  (set! tab-count (+ tab-count 1))
+  (analyse-sequence body)
+  (set! tab-count (- tab-count 1))
+ )
+
+;;define-analyse 
+(define (define-analyser exp)
+  (let ([name (def-var exp)] 
+        [par  (def-par exp)]
+        [body (def-body exp)])
+  (if (present? name defined_identifiers) 
+      (error "identifier defined earlier:"name)
+      (set! defined_identifiers (cons name defined_identifiers)))
+  (if (symbol? (cadr exp)) (to-py-decl (cadr exp) (caddr exp)) 
+      (to-py-def name par body))))
+
+;;to-py-array
+(define (to-py-array l)
+  (printf"[")(arg-list l)(printf"]"))
+
+
+
+( l )

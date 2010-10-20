@@ -1,0 +1,28 @@
+----------------------------------------------------------------------------
+This directory contains the source code of Scheme-to-Python translator which is
+developed for Android OS . This software when built will translate a code 
+written in the "SCHEME" language to corresponding "PYTHON" code . This can 
+then be run on Android- SDK if the SL4A (Scripting layer for Android) is installed on the SDK with Python support on it.
+
+For proper working of the software the system needs to satisfy have following 
+prerequisites
+1)  mzscheme 
+2) Android-SDK
+        A) A SDcard to be created with a name which can be mounted.
+	B) An AVD (Android Virtual Device) needs to be there.
+	B) SL4A to be installed on it with python support.
+3) Drscheme 
+4) Idle
+
+The file "script" needs to be edited by providing as per information needed
+
+The software can then be build by the command:
+
+  make 
+
+and can be run by command:
+
+  ./test
+
+-----------------------------------------------------------------------------
+ 

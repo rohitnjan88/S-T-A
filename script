@@ -1,0 +1,22 @@
+mkdir sdcard
+
+## edit the next line with path to the android sdk directory
+#  mount -o loop  path-to-android-sdk sdcard
+
+
+echo copying out.py to sdcard.... 
+cp out.py sdcard/sl4a/scripts/out.py
+>out.py
+sleep 1
+umount sdcard
+rm -r sdcard
+echo starting up the android emulator.... 
+
+
+## edit with path to android sdk tools directory
+#cd path-to-android-sdk-tools-directory
+
+
+## edit the next line with your avd-name and sdcard-name 
+#./emulator @'avd-name' -sdcard 'sdcard-name'
+
